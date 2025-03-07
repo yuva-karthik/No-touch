@@ -267,6 +267,7 @@ def get_voice_command():
         cv2.imshow("Gesture Control", frame)
         cv2.waitKey(1)
         return ""
+<<<<<<< HEAD
         
     except Exception as e:
         print(f"Error in speech recognition: {e}")
@@ -275,6 +276,8 @@ def get_voice_command():
         cv2.imshow("Gesture Control", frame)
         cv2.waitKey(1)
         return ""
+=======
+>>>>>>> 254dac5c7f5051e82f3f2a0148447b3b1dbb27e2
 
 def handle_text_input_mode(gesture_name, thumb_direction):
     """Handle gestures in text input mode"""
@@ -533,6 +536,122 @@ cap = cv2.VideoCapture(0)
 cv2.namedWindow("Gesture Control", cv2.WINDOW_NORMAL)
 cv2.resizeWindow("Gesture Control", 1280, 720)
 
+<<<<<<< HEAD
+=======
+def capture_reference_photo(photo_path):
+    """Load a reference photo for face authentication from a specified path."""
+    if os.path.exists(photo_path):
+        print(f"Loading reference photo from: {photo_path}")
+        reference_photo = photo_path  # Store the path for later use
+    else:
+        print("Error: The specified photo path does not exist.")
+        return False
+    return True
+
+def run():
+    # Ask user for the path to the reference photo
+    photo_path = input("Enter the path to the reference photo: ")
+    if not capture_reference_photo(photo_path):
+        return
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+            
+        # Save the current frame for face authentication
+        cv2.imwrite("current_frame.jpg", frame)  # Save the current frame
+        
+        # Authenticate the face using the loaded reference photo
+        if not authenticate_face():
+            print("Face not recognized. Exiting application.")
+            break  # Exit if face is not recognized
+            
+        # Flip frame horizontally
+        frame = cv2.flip(frame, 1)
+        
+        # Process frame for hand detection
+        holistic_results, hands_results = self.gesture_recognizer.process_frame(frame)
+        
+        # Create a semi-transparent overlay for text
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (400, 400), (0, 0, 0), -1)
+        frame = cv2.addWeighted(overlay, 0.3, frame, 0.7, 0)
+        
+        # Draw instructions
+        draw_instructions(frame)
+        
+        if hands_results.multi_hand_landmarks:
+            # Get the primary hand for gesture control
+            primary_hand, hand_id = get_primary_hand(hands_results)
+            
+            # Draw all detected hands but only process gestures for primary hand
+            for idx, hand_landmarks in enumerate(hands_results.multi_hand_landmarks):
+                # Draw hand landmarks
+                mp_drawing.draw_landmarks(
+                    frame,
+                    hand_landmarks,
+                    mp_hands.HAND_CONNECTIONS,
+                    mp_drawing_styles.get_default_hand_landmarks_style(),
+                    mp_drawing_styles.get_default_hand_connections_style())
+                
+                # Calculate hand center for identification
+                hand_center = np.mean([(lm.x, lm.y) for lm in hand_landmarks.landmark], axis=0)
+                hand_id = f"hand_{idx}{hand_center[0]:.2f}{hand_center[1]:.2f}"
+                
+                # Only process gestures for the primary hand
+                if idx == primary_hand_id:
+                    # Get enhanced gesture detection
+                    fingers, gesture_name, thumb_direction = detect_gesture(hand_landmarks)
+                    
+                    # Display primary hand status with time active
+                    time_active = time.time() - hand_tracking_history.get(hand_id, time.time())
+                    cv2.putText(frame, f"Primary Hand: {gesture_name} (Active: {time_active:.1f}s)", 
+                               (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    
+                    # Perform action only for primary hand
+                    perform_action(gesture_name, hand_landmarks, thumb_direction)
+                else:
+                    # Show inactive hand status with its age
+                    time_active = time.time() - hand_tracking_history.get(hand_id, time.time())
+                    cv2.putText(frame, f"Inactive Hand {idx} (Active: {time_active:.1f}s)", 
+                               (10, 60 + (30 * idx)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (128, 128, 128), 2)
+            
+            # Display number of hands detected
+            cv2.putText(frame, f"Hands Detected: {len(hands_results.multi_hand_landmarks)}", (10, 150),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                
+            # Display action status
+            if time.time() - last_action_time < action_cooldown:
+                cv2.putText(frame, "Action Cooldown...", (10, 180),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        
+        # Add voice input status
+        if is_listening:
+            cv2.putText(frame, "Listening for voice input...", (10, 150),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        
+        # Display the main frame
+        cv2.imshow("Gesture Control", frame)
+        
+        # Break loop on 'q' press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Release resources
+    cap.release()
+    cv2.destroyAllWindows()
+    holistic.close()
+    hands.close()
+
+# Initialize Webcam
+cap = cv2.VideoCapture(0)
+
+# Set up display window
+cv2.namedWindow("Gesture Control", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Gesture Control", 1280, 720)
+
+>>>>>>> 254dac5c7f5051e82f3f2a0148447b3b1dbb27e2
 while True:
     success, frame = cap.read()
     if not success:
