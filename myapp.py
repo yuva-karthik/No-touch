@@ -5,10 +5,29 @@ from math import sqrt
 import os
 import pyautogui
 import time
+import speech_recognition as sr
+import win32gui
+import win32api
+import win32con
 
 # Configure PyAutoGUI
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
+
+# Initialize speech recognition
+recognizer = sr.Recognizer()
+try:
+    microphone = sr.Microphone()
+    print("Speech recognition initialized successfully")
+except Exception as e:
+    print(f"Error initializing microphone: {e}")
+    print("Please ensure you have a working microphone and PyAudio is installed")
+    print("Install PyAudio with: pip install pyaudio")
+
+# Text input mode settings
+is_text_input_mode = False
+last_text_input_check = time.time()
+text_input_check_interval = 0.5  # Check for text box every 0.5 seconds
 
 # Initialize MediaPipe
 mp_hands = mp.solutions.hands
@@ -34,6 +53,10 @@ last_gesture_time = time.time()
 gesture_hold_time = 0.3
 action_cooldown = 0.2
 last_action_time = time.time()
+primary_hand_id = None  # Track the ID of the primary hand
+primary_hand_time = 0  # Time when primary hand was last active
+hand_tracking_history = {}  # Track when each hand first appeared
+hand_tracking_timeout = 2.0  # Time before removing hand from history
 
 # Mouse control settings
 MOUSE_SENSITIVITY = 2.0  # Adjust this value to change mouse movement sensitivity
@@ -159,20 +182,226 @@ def detect_gesture(hand_landmarks):
     
     return fingers, gesture_name, thumb_direction
 
+def is_cursor_in_text_field():
+    """Enhanced check if cursor is in a text input field"""
+    try:
+        # Get the foreground window and focused control
+        foreground_window = win32gui.GetForegroundWindow()
+        focused_control = win32gui.GetFocus()
+        
+        # Get class names
+        window_class = win32gui.GetClassName(foreground_window)
+        control_class = win32gui.GetClassName(focused_control) if focused_control else ""
+        
+        # Expanded list of text input class names
+        text_input_classes = [
+            'Edit',  # Standard Windows text box
+            'RichEdit',  # Rich text box
+            'RichEdit20W',  # Modern rich text box
+            'RichEdit20A',  # Another rich text variant
+            'TextBox',  # Generic text box
+            'RICHEDIT50W',  # Windows 10 rich edit
+            'Chrome_RenderWidgetHostHWND',  # Chrome browser
+            'MozillaWindowClass',  # Firefox
+            'Scintilla',  # Code editors
+            'Notepad',  # Notepad
+            'WordPadClass',  # WordPad
+            'EXCEL7',  # Excel cells
+            'OpusApp',  # Word documents
+            'SUMATRA_PDF_FRAME'  # PDF editor fields
+        ]
+
+        # Common window classes that might contain text fields
+        container_classes = [
+            'Chrome_WidgetWin_1',  # Chrome windows
+            'MozillaWindowClass',  # Firefox windows
+            'Notepad',
+            'WordPadClass',
+            'OpusApp',
+            'EXCEL7'
+        ]
+        
+        # Check direct class matches
+        if any(text_class in control_class for text_class in text_input_classes):
+            return True
+            
+        if any(text_class in window_class for text_class in text_input_classes):
+            return True
+            
+        # Additional check for browser text fields
+        if any(container in window_class for container in container_classes):
+            # Get cursor position
+            cursor_pos = win32gui.GetCursorPos()
+            # Convert screen coordinates to client coordinates
+            client_pos = win32gui.ScreenToClient(foreground_window, cursor_pos)
+            
+            # Get window text at cursor position
+            try:
+                child_at_point = win32gui.ChildWindowFromPoint(foreground_window, client_pos)
+                if child_at_point:
+                    child_class = win32gui.GetClassName(child_at_point)
+                    if any(text_class in child_class for text_class in text_input_classes):
+                        return True
+            except:
+                pass
+            
+            # Additional check for browser input fields
+            if 'Chrome' in window_class or 'Mozilla' in window_class:
+                # Most browser text fields are detected by clicking
+                # We'll consider it a text field if it's a potential browser input area
+                return True
+                
+        return False
+    except Exception as e:
+        print(f"Error checking text field: {e}")
+        return False
+
+def get_voice_command():
+    """Get voice command from microphone with simplified implementation"""
+    global frame
+    
+    try:
+        # Visual feedback - listening
+        cv2.putText(frame, "Listening...", (10, 150),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.imshow("Gesture Control", frame)
+        cv2.waitKey(1)
+        
+        # Use microphone as source
+        with sr.Microphone() as source:
+            print("Listening...")
+            
+            # Adjust for ambient noise
+            recognizer.adjust_for_ambient_noise(source)
+            # Listen for audio
+            audio = recognizer.listen(source)
+            
+            # Visual feedback - processing
+            cv2.putText(frame, "Processing...", (10, 150),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            cv2.imshow("Gesture Control", frame)
+            cv2.waitKey(1)
+            
+            # Convert speech to text
+            text = recognizer.recognize_google(audio)
+            print(f"Recognized: {text}")
+            
+            # Visual feedback - recognized
+            cv2.putText(frame, f"Recognized: {text}", (10, 150),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.imshow("Gesture Control", frame)
+            cv2.waitKey(1)
+            
+            return text.lower()
+            
+    except sr.UnknownValueError:
+        print("Could not understand audio")
+        cv2.putText(frame, "Could not understand audio", (10, 150),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.imshow("Gesture Control", frame)
+        cv2.waitKey(1)
+        return ""
+        
+    except sr.RequestError as e:
+        print(f"Could not request results; {e}")
+        cv2.putText(frame, "Speech recognition error", (10, 150),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.imshow("Gesture Control", frame)
+        cv2.waitKey(1)
+        return ""
+        
+    except Exception as e:
+        print(f"Error in speech recognition: {e}")
+        cv2.putText(frame, "Error occurred", (10, 150),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.imshow("Gesture Control", frame)
+        cv2.waitKey(1)
+        return ""
+
+def handle_text_input_mode(gesture_name, thumb_direction):
+    """Handle gestures in text input mode"""
+    global is_text_input_mode, frame
+    
+    if gesture_name == "✊ Fist":
+        # Exit text input mode
+        voice_command = get_voice_command()
+        if voice_command == "quit":
+            is_text_input_mode = False
+            print("Exiting text input mode")
+            return
+    
+    elif gesture_name == "🖐 Open Palm":
+        # Move cursor left/right based on hand position
+        if thumb_direction == "Up":
+            pyautogui.press('left')
+        else:
+            pyautogui.press('right')
+    
+    elif gesture_name == "🤟 I Love You":
+        # Backspace
+        pyautogui.press('backspace')
+    
+    elif gesture_name == "👍 Thumbs Up":
+        # Take voice input and type it
+        print("Please speak your text...")
+        voice_command = get_voice_command()
+        if voice_command and voice_command != "quit":
+            try:
+                # Visual feedback - typing
+                cv2.putText(frame, f"Typing: {voice_command}", (10, 150),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                cv2.imshow("Gesture Control", frame)
+                cv2.waitKey(1)
+                
+                # Ensure text box is focused
+                pyautogui.click()
+                time.sleep(0.1)  # Small delay to ensure focus
+                
+                # Type the recognized text
+                pyautogui.write(voice_command)
+                pyautogui.press('space')  # Add space after text
+                
+                print(f"Successfully typed: {voice_command}")
+                
+            except Exception as e:
+                print(f"Error typing text: {e}")
+                cv2.putText(frame, "Error typing text", (10, 150),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.imshow("Gesture Control", frame)
+                cv2.waitKey(1)
+
 def perform_action(current_gesture, hand_landmarks, thumb_direction):
     """Perform actions based on gestures and transitions"""
-    global last_gesture, last_gesture_time, last_action_time, last_hand_position
+    global last_gesture, last_gesture_time, last_action_time, last_hand_position, is_text_input_mode, last_text_input_check
     
     current_time = time.time()
     
-    # Get middle finger tip position for mouse control
-    middle_tip = hand_landmarks.landmark[12]
+    # Check for text input mode
+    if current_time - last_text_input_check >= text_input_check_interval:
+        current_in_text_field = is_cursor_in_text_field()
+        
+        # Enter text mode when clicking in text field
+        if not is_text_input_mode and current_in_text_field:
+            is_text_input_mode = True
+            print("Entered text input mode")
+            pyautogui.press('left')  # Ensure cursor is visible
+        
+        # Exit text mode when clicking outside text field
+        elif is_text_input_mode and not current_in_text_field:
+            is_text_input_mode = False
+            print("Exited text input mode")
+            
+        last_text_input_check = current_time
     
-    # Handle gesture transitions and actions
+    # Handle text input mode separately
+    if is_text_input_mode:
+        handle_text_input_mode(current_gesture, thumb_direction)
+        return
+    
+    # Regular gesture control mode
     if current_gesture != last_gesture:
         last_gesture_time = current_time
         last_gesture = current_gesture
-        # Reset hand position when gesture changes
         last_hand_position = None
     elif current_time - last_gesture_time >= gesture_hold_time:
         # Perform actions based on gestures
@@ -180,6 +409,7 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
             # Move mouse based on relative hand movement
             if last_hand_position is not None:
                 # Calculate movement delta
+                middle_tip = hand_landmarks.landmark[12]
                 delta_x = (middle_tip.x - last_hand_position[0]) * screen_width * MOUSE_SENSITIVITY
                 delta_y = (middle_tip.y - last_hand_position[1]) * screen_height * MOUSE_SENSITIVITY
                 
@@ -198,7 +428,7 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
                 pyautogui.moveTo(new_x, new_y)
             
             # Update last hand position
-            last_hand_position = (middle_tip.x, middle_tip.y)
+            last_hand_position = (hand_landmarks.landmark[12].x, hand_landmarks.landmark[12].y)
             
         elif current_gesture == "🤟 I Love You":
             # Left click
@@ -221,30 +451,90 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
             pyautogui.scroll(scroll_amount)
             last_action_time = current_time
 
-# Initialize Webcam
-cap = cv2.VideoCapture(0)
-
-# Set up display window
-cv2.namedWindow("Gesture Control", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("Gesture Control", 1280, 720)
-
-# Display instructions
 def draw_instructions(frame):
-    instructions = [
-        "Gesture Controls:",
-        "🖐 Open Palm: Move Cursor",
-        "✊ Fist: Standby",
-        "🤟 I Love You: Left Click",
-        "🤘 Yo: Right Click",
-        "👍 Thumbs Up + Direction: Scroll Up/Down",
-        "Press 'q' to quit"
-    ]
+    """Draw instructions based on current mode"""
+    if is_text_input_mode:
+        instructions = [
+            "Text Input Mode:",
+            "👍 Thumbs Up: Voice Input",
+            "🖐 Open Palm: Move Cursor (Up=Left, Down=Right)",
+            "🤟 I Love You: Backspace",
+            "✊ Fist + Say 'quit': Exit Text Mode",
+            "Press 'q' to quit"
+        ]
+    else:
+        instructions = [
+            "Gesture Controls:",
+            "🖐 Open Palm: Move Cursor",
+            "✊ Fist: Standby",
+            "🤟 I Love You: Left Click",
+            "🤘 Yo: Right Click",
+            "👍 Thumbs Up + Direction: Scroll Up/Down",
+            "Press 'q' to quit"
+        ]
     
     y_offset = 200
     for instruction in instructions:
         cv2.putText(frame, instruction, (10, y_offset),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         y_offset += 30
+
+def get_primary_hand(hands_results):
+    """Determine which hand should be the primary hand for gesture control"""
+    global primary_hand_id, primary_hand_time, hand_tracking_history
+    current_time = time.time()
+    
+    # Clean up old hands from history
+    hand_tracking_history = {k: v for k, v in hand_tracking_history.items() 
+                           if current_time - v < hand_tracking_timeout}
+    
+    # If no hands are detected, reset tracking
+    if not hands_results.multi_hand_landmarks:
+        primary_hand_id = None
+        hand_tracking_history.clear()
+        return None, -1
+    
+    # Update hand tracking history with new hands
+    for idx, hand_landmarks in enumerate(hands_results.multi_hand_landmarks):
+        # Calculate a unique identifier for this hand based on its initial position
+        hand_center = np.mean([(lm.x, lm.y) for lm in hand_landmarks.landmark], axis=0)
+        hand_id = f"hand_{idx}_{hand_center[0]:.2f}_{hand_center[1]:.2f}"
+        
+        # Record first appearance time if this is a new hand
+        if hand_id not in hand_tracking_history:
+            hand_tracking_history[hand_id] = current_time
+    
+    # If only one hand is present
+    if len(hands_results.multi_hand_landmarks) == 1:
+        primary_hand_id = 0
+        return hands_results.multi_hand_landmarks[0], 0
+    
+    # If multiple hands are present, find the oldest hand
+    if len(hands_results.multi_hand_landmarks) > 1:
+        oldest_time = float('inf')
+        oldest_idx = 0
+        
+        for idx, hand_landmarks in enumerate(hands_results.multi_hand_landmarks):
+            hand_center = np.mean([(lm.x, lm.y) for lm in hand_landmarks.landmark], axis=0)
+            hand_id = f"hand_{idx}_{hand_center[0]:.2f}_{hand_center[1]:.2f}"
+            
+            if hand_id in hand_tracking_history:
+                appear_time = hand_tracking_history[hand_id]
+                if appear_time < oldest_time:
+                    oldest_time = appear_time
+                    oldest_idx = idx
+        
+        primary_hand_id = oldest_idx
+        return hands_results.multi_hand_landmarks[oldest_idx], oldest_idx
+    
+    return None, -1
+
+# Initialize Webcam
+cap = cv2.VideoCapture(0)
+
+# Set up display window
+cv2.namedWindow("Gesture Control", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Gesture Control", 1280, 720)
 
 while True:
     success, frame = cap.read()
@@ -305,8 +595,12 @@ while True:
             video_player.set(cv2.CAP_PROP_POS_FRAMES, 0)
     
     if hands_results.multi_hand_landmarks:
-        for hand_landmarks in hands_results.multi_hand_landmarks:
-            # Draw hand landmarks with improved styling
+        # Get the primary hand for gesture control
+        primary_hand, hand_id = get_primary_hand(hands_results)
+        
+        # Draw all detected hands but only process gestures for primary hand
+        for idx, hand_landmarks in enumerate(hands_results.multi_hand_landmarks):
+            # Draw hand landmarks
             mp_drawing.draw_landmarks(
                 frame,
                 hand_landmarks,
@@ -314,19 +608,36 @@ while True:
                 mp_drawing_styles.get_default_hand_landmarks_style(),
                 mp_drawing_styles.get_default_hand_connections_style())
             
-            # Get enhanced gesture detection
-            fingers, gesture_name, thumb_direction = detect_gesture(hand_landmarks)
+            # Calculate hand center for identification
+            hand_center = np.mean([(lm.x, lm.y) for lm in hand_landmarks.landmark], axis=0)
+            hand_id = f"hand_{idx}_{hand_center[0]:.2f}_{hand_center[1]:.2f}"
             
-            # Display current gesture and status
-            cv2.putText(frame, f"Current Gesture: {gesture_name}", (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.putText(frame, f"Thumb Direction: {thumb_direction}", (10, 70),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            # Only process gestures for the primary hand
+            if idx == primary_hand_id:
+                # Get enhanced gesture detection
+                fingers, gesture_name, thumb_direction = detect_gesture(hand_landmarks)
+                
+                # Display primary hand status with time active
+                time_active = time.time() - hand_tracking_history.get(hand_id, time.time())
+                cv2.putText(frame, f"Primary Hand: {gesture_name} (Active: {time_active:.1f}s)", 
+                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # Perform action only for primary hand
+                perform_action(gesture_name, hand_landmarks, thumb_direction)
+            else:
+                # Show inactive hand status with its age
+                time_active = time.time() - hand_tracking_history.get(hand_id, time.time())
+                cv2.putText(frame, f"Inactive Hand {idx} (Active: {time_active:.1f}s)", 
+                           (10, 60 + (30 * idx)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (128, 128, 128), 2)
+        
+        # Display number of hands detected
+        cv2.putText(frame, f"Hands Detected: {len(hands_results.multi_hand_landmarks)}", (10, 150),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
-            # Display action status
-            if time.time() - last_action_time < action_cooldown:
-                cv2.putText(frame, "Action Cooldown...", (10, 110),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        # Display action status
+        if time.time() - last_action_time < action_cooldown:
+            cv2.putText(frame, "Action Cooldown...", (10, 180),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     
     # Display the main frame
     cv2.imshow("Gesture Control", frame)
