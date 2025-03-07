@@ -1,88 +1,84 @@
 # main.py
 import cv2
-import pyautogui
 import time
 import numpy as np
-import mediapipe as mp
+import pyautogui
+from config import holistic, hands, is_text_input_mode, screen_width, screen_height
+from gesture import detect_gesture
+from actions import perform_action
+from utils import draw_instructions, get_primary_hand
+from video import init_video, release_video
 
-from config import *
-from gesture import detect_gesture, get_primary_hand
-from speech import get_voice_command
-from video import display_mini_player
-from actions import perform_action, handle_text_input_mode
-from utils import draw_instructions
-
-pyautogui.FAILSAFE = False  # Disable the fail-safe
-
-mp_holistic = mp.solutions.holistic
-mp_hands = mp.solutions.hands
-holistic = mp_holistic.Holistic(min_detection_confidence=MIN_DETECTION_CONFIDENCE,
-                                min_tracking_confidence=MIN_TRACKING_CONFIDENCE)
-hands = mp_hands.Hands(static_image_mode=False,
-                       max_num_hands=2,
-                       min_detection_confidence=0.5,
-                       min_tracking_confidence=0.5)
-
-# Initialize webcam for main feed
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-# Use the live camera feed for the mini player as well
-video_player = cv2.VideoCapture(VIDEO_PATH, cv2.CAP_DSHOW)
-video_loaded = video_player.isOpened()
-
-cv2.namedWindow("Gesture Control", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("Gesture Control", 1280, 720)
-cv2.namedWindow("Mini Player", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("Mini Player", MINI_PLAYER_WIDTH, MINI_PLAYER_HEIGHT)
-screen_width, screen_height = pyautogui.size()
-
-hand_tracking_history = {}
-HAND_TRACKING_TIMEOUT = 2.0
-primary_hand_id = None
-is_text_input_mode = IS_TEXT_INPUT_MODE
-
-def set_text_mode(state):
-    global is_text_input_mode
-    is_text_input_mode = state
+# Initialize video capture
+cap = init_video()
 
 while True:
-    success, frame = cap.read()
-    if not success:
+    ret, frame = cap.read()
+    if not ret:
         break
-        
+
+    # Flip frame horizontally
     frame = cv2.flip(frame, 1)
+    
+    # Convert frame to RGB for MediaPipe processing
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    
+    # Process with MediaPipe holistic and hands models
     holistic_results = holistic.process(rgb_frame)
     hands_results = hands.process(rgb_frame)
     
+    # Create a semi-transparent overlay for instructions
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (400, 400), (0, 0, 0), -1)
     frame = cv2.addWeighted(overlay, 0.3, frame, 0.7, 0)
+    
+    # Draw instructions on the frame
     draw_instructions(frame, is_text_input_mode)
     
-    if video_loaded:
-        display_mini_player(video_player, screen_width, screen_height)
-    
     if hands_results.multi_hand_landmarks:
-        primary_hand, primary_hand_id = get_primary_hand(hands_results, hand_tracking_history, HAND_TRACKING_TIMEOUT)
+        primary_hand, hand_idx = get_primary_hand(hands_results)
+        
+        # Draw all detected hands and process primary hand for gestures
         for idx, hand_landmarks in enumerate(hands_results.multi_hand_landmarks):
-            mp.solutions.drawing_utils.draw_landmarks(
+            from config import mp_drawing, mp_hands, mp_drawing_styles
+            mp_drawing.draw_landmarks(
                 frame,
                 hand_landmarks,
-                mp_hands.HAND_CONNECTIONS)
-            if idx == primary_hand_id:
-                _, gesture_name, thumb_direction = detect_gesture(
-                    hand_landmarks,
-                    lambda g, hl, td: perform_action(g, hl, td, frame, screen_width, screen_height)
-                )
-                cv2.putText(frame, f"Primary: {gesture_name}", 
+                mp_hands.HAND_CONNECTIONS,
+                mp_drawing_styles.get_default_hand_landmarks_style(),
+                mp_drawing_styles.get_default_hand_connections_style())
+            
+            hand_center = np.mean([(lm.x, lm.y) for lm in hand_landmarks.landmark], axis=0)
+            hand_id = f"hand_{idx}{hand_center[0]:.2f}{hand_center[1]:.2f}"
+            
+            if idx == hand_idx:
+                # For the primary hand, detect gesture and perform its action
+                fingers, gesture_name, thumb_direction = detect_gesture(hand_landmarks)
+                cv2.putText(frame, f"Primary Hand: {gesture_name}", 
                             (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                perform_action(gesture_name, hand_landmarks, thumb_direction)
+            else:
+                cv2.putText(frame, f"Inactive Hand {idx}", 
+                            (10, 60 + (30 * idx)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (128, 128, 128), 2)
+        
+        cv2.putText(frame, f"Hands Detected: {len(hands_results.multi_hand_landmarks)}", (10, 150),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        
+        from config import last_action_time, action_cooldown
+        if time.time() - last_action_time < action_cooldown:
+            cv2.putText(frame, "Action Cooldown...", (10, 180),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    
+    from config import is_listening
+    if is_listening:
+        cv2.putText(frame, "Listening for voice input...", (10, 150),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    
     cv2.imshow("Gesture Control", frame)
+    
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-cap.release()
-if video_loaded:
-    video_player.release()
-cv2.destroyAllWindows()
+release_video(cap)
 holistic.close()
 hands.close()
