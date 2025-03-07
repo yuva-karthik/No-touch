@@ -6,6 +6,7 @@ import os
 import pyautogui
 import time
 
+
 # Configure PyAutoGUI
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
