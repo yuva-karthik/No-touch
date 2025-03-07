@@ -35,7 +35,8 @@ def is_cursor_in_text_field():
             'WordPadClass',
             'EXCEL7',
             'OpusApp',
-            'WhatsAppWindowClass'
+            'WhatsAppWindowClass',
+            'Chrome_WidgetWin_1'  # Added for Google Chrome search text boxes
         ]
         
         try:
