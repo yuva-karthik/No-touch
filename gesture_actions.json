@@ -1,0 +1,17 @@
+{
+    "normal_mode": {
+        "🖐 Open Palm": "Update Hand Position",
+        "✊ Fist": "Move Mouse",
+        "🤟 I Love You": "Left Click",
+        "👍 Thumbs Up": "Scroll Down",
+        "🤘 Yo": "Right Click",
+        "👎 Thumbs Down": "Exit Text Input Mode"
+    },
+    "text_input_mode": {
+        "✊ Fist": "Listen for Voice Command",
+        "🖐 Open Palm": "Move Cursor Left/Right",
+        "🤟 I Love You": "Backspace",
+        "👍 Thumbs Up": "Backspace",
+        "👎 Thumbs Down": "Exit Text Input Mode"
+    }
+}

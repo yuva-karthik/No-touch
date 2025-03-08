@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture Actions Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .mode-container {
+            margin-bottom: 30px;
+        }
+        .gesture-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .gesture-item {
+            margin-bottom: 10px;
+        }
+        select {
+            margin-left: 10px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gesture Actions Configuration</h1>
+
+    <!-- Normal Mode -->
+    <div class="mode-container">
+        <h2>Normal Mode</h2>
+        <ul class="gesture-list">
+            {% for gesture, action in actions.normal_mode.items() %}
+            <li class="gesture-item">
+                {{ gesture }}:
+                <select onchange="updateAction('normal_mode', '{{ gesture }}', this.value)">
+                    {% for frequent_action in frequent_actions %}
+                    <option value="{{ frequent_action }}" {% if action == frequent_action %}selected{% endif %}>
+                        {{ frequent_action }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <!-- Text Input Mode -->
+    <div class="mode-container">
+        <h2>Text Input Mode</h2>
+        <ul class="gesture-list">
+            {% for gesture, action in actions.text_input_mode.items() %}
+            <li class="gesture-item">
+                {{ gesture }}:
+                <select onchange="updateAction('text_input_mode', '{{ gesture }}', this.value)">
+                    {% for frequent_action in frequent_actions %}
+                    <option value="{{ frequent_action }}" {% if action == frequent_action %}selected{% endif %}>
+                        {{ frequent_action }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <button onclick="location.reload()">Refresh</button>
+
+    <script>
+        function updateAction(mode, gesture, action) {
+            fetch('/update_action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `mode=${mode}&gesture=${gesture}&action=${action}`
+            }).then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
