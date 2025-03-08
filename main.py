@@ -1,16 +1,20 @@
-# main.py
 import cv2
 import time
 import numpy as np
 import pyautogui
-from config import holistic, hands, is_text_input_mode, screen_width, screen_height
+from config import holistic, hands, is_text_input_mode, screen_width, screen_height, is_listening, last_action_time, action_cooldown, mp_drawing, mp_hands, mp_drawing_styles
 from gesture import detect_gesture
 from actions import perform_action
 from utils import draw_instructions, get_primary_hand
 from video import init_video, release_video
+from face import is_authorized_face
 
 # Initialize video capture
 cap = init_video()
+
+last_face_check_time = 0
+face_check_interval = 3  # seconds
+authorized = False
 
 while True:
     ret, frame = cap.read()
@@ -22,6 +26,20 @@ while True:
     
     # Convert frame to RGB for MediaPipe processing
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    current_time = time.time()
+    if current_time - last_face_check_time > face_check_interval:
+        authorized = is_authorized_face(frame)
+        last_face_check_time = current_time
+
+    # If unauthorized, display a message and skip gesture processing.
+    if not authorized:
+        cv2.putText(frame, "Unauthorized face", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.imshow("Gesture Control", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        continue
     
     # Process with MediaPipe holistic and hands models
     holistic_results = holistic.process(rgb_frame)

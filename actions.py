@@ -13,22 +13,24 @@ DEFAULT_NORMAL_MODE_ACTIONS = {
     "🤟 I Love You": "Left Click",
     "👍 Thumbs Up": "Scroll Down",
     "🤘 Yo": "Right Click",
-    "👎 Thumbs Down": "Exit Text Input Mode"
+    "👎 Thumbs Down": "Exit Text Input Mode",
+      # Add this line
 }
 
 # Default gesture-action mappings for Text Input Mode
 DEFAULT_TEXT_INPUT_MODE_ACTIONS = {
     "✊ Fist": "Listen for Voice Command",
-    "🖐 Open Palm": "Move Cursor Left/Right",
-    "🤟 I Love You": "Backspace",
-    "👍 Thumbs Up": "Backspace",
-    "👎 Thumbs Down": "Exit Text Input Mode"
+    "🖐 Open Palm": "Move Mouse",
+    "🤟 I Love You": "Left Click",
+    "👍 Thumbs Up": "Start Voice Input",
+    "👎 Thumbs Down": "Exit Text Input Mode",
+    "🤙 Call Me": "Backspace"  # Add this line
 }
 
 # Load gesture-action mappings from JSON file or use defaults
 def load_gesture_actions():
     try:
-        with open("gesture_actions.json", "r", encoding="utf-8") as file:
+        with open("./Desktop/GenAI_hack/No-touch/gesture_actions.json", "r", encoding="utf-8") as file:
             return json.load(file)
     except FileNotFoundError:
         print("gesture_actions.json not found. Using default mappings.")
@@ -56,6 +58,7 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
     if current_gesture in mode_actions:
         action = mode_actions[current_gesture]
 
+        # Handle "Move Mouse" action (available in both modes)
         if action == "Move Mouse":
             middle_tip = hand_landmarks.landmark[12]
             current_hand = (middle_tip.x, middle_tip.y)
@@ -83,17 +86,7 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
             elif thumb_direction == "Down":
                 pyautogui.press('right')
 
-        elif action == "Update Hand Position":
-            middle_tip = hand_landmarks.landmark[12]
-            config.last_hand_position = (middle_tip.x, middle_tip.y)
-
-            # Additional behavior in text input mode
-            if config.is_text_input_mode:
-                voice_command = get_voice_command()
-                if voice_command == "quit":
-                    config.is_text_input_mode = False
-                    print("Exited text input mode")
-
+        # Handle "Left Click" action (available in both modes)
         elif action == "Left Click":
             if time.time() - config.last_action_time >= config.action_cooldown:
                 pyautogui.click()
@@ -113,6 +106,23 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
             else:
                 remaining_cooldown = config.action_cooldown - (time.time() - config.last_action_time)
                 print(f"Click cooldown: {remaining_cooldown:.1f}s")
+
+        # Handle "Backspace" action (available in both modes)
+        elif action == "Backspace":
+            pyautogui.press('backspace')
+            print("Backspace pressed")
+
+        # Handle other actions
+        elif action == "Update Hand Position":
+            middle_tip = hand_landmarks.landmark[12]
+            config.last_hand_position = (middle_tip.x, middle_tip.y)
+
+            # Additional behavior in text input mode
+            if config.is_text_input_mode:
+                voice_command = get_voice_command()
+                if voice_command == "quit":
+                    config.is_text_input_mode = False
+                    print("Exited text input mode")
 
         elif action == "Scroll Down":
             pyautogui.scroll(-100)
@@ -145,11 +155,6 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
                         cv2.imshow("Gesture Control", frame)
                         cv2.waitKey(1)
 
-        elif action == "Backspace":
-            if config.is_text_input_mode:
-                pyautogui.press('backspace')
-                print("Backspace pressed")
-
         elif action == "Start Voice Input":
             if config.is_text_input_mode and not config.is_listening:
                 print("Starting voice input...")
@@ -161,3 +166,5 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
                 print("Exited text input mode")
 
     config.last_gesture = current_gesture
+
+    

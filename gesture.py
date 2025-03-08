@@ -40,13 +40,14 @@ def get_extended_fingers(landmarks):
 def get_gesture_name(fingers, angles, thumb_direction):
     """Enhanced gesture recognition including thumb direction"""
     gesture_dict = {
-        (0, 0, 0, 0, 0): "✊ Fist",
-        (1, 1, 1, 1, 1): "🖐 Open Palm",
-        (1, 1, 1, 0, 0): "🤟 I Love You",
-        (0, 1, 1, 1, 0): "🤘 Yo",
-        (0, 0, 0, 0, 1): "👎 Thumbs Down"
-    }
-    
+    (0, 0, 0, 0, 0): "✊ Fist",          # All fingers closed
+    (1, 1, 1, 1, 1): "🖐 Open Palm",    # All fingers open
+    (1, 1, 1, 0, 0): "🤟 I Love You",   # Thumb, index, and middle fingers open
+    (0, 1, 1, 1, 0): "🤘 Yo",           # Index, middle, and ring fingers open
+    (0, 0, 0, 0, 1): "👎 Thumbs Down",  # Only thumb open (downward)
+    (1, 0, 0, 0, 0): "👍 Thumbs Up",    # Only thumb open (upward)
+    (0, 1, 1, 0, 0): "🤙 Call Me"       # Index and middle fingers open (like a "call me" gesture)
+}
     # Special case for Thumbs Up (up/down)
     if tuple(fingers) == (1, 0, 0, 0, 0):
         if thumb_direction == "Up":
