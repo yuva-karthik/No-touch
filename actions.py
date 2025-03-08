@@ -14,7 +14,7 @@ DEFAULT_NORMAL_MODE_ACTIONS = {
     "👍 Thumbs Up": "Scroll Down",
     "🤘 Yo": "Right Click",
     "👎 Thumbs Down": "Exit Text Input Mode",
-      # Add this line
+    "🤙 Call Me": "Backspace"  # Backspace in Normal Mode
 }
 
 # Default gesture-action mappings for Text Input Mode
@@ -24,7 +24,7 @@ DEFAULT_TEXT_INPUT_MODE_ACTIONS = {
     "🤟 I Love You": "Left Click",
     "👍 Thumbs Up": "Start Voice Input",
     "👎 Thumbs Down": "Exit Text Input Mode",
-    "🤙 Call Me": "Backspace"  # Add this line
+    "🤙 Call Me": "Backspace"  # Backspace in Text Input Mode
 }
 
 # Load gesture-action mappings from JSON file or use defaults
@@ -57,6 +57,9 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
 
     if current_gesture in mode_actions:
         action = mode_actions[current_gesture]
+
+        # Debugging: Print the current gesture and action
+        print(f"Detected Gesture: {current_gesture}, Action: {action}")
 
         # Handle "Move Mouse" action (available in both modes)
         if action == "Move Mouse":
@@ -109,10 +112,11 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
 
         # Handle "Backspace" action (available in both modes)
         elif action == "Backspace":
+            print("Executing Backspace...")
             pyautogui.press('backspace')
             print("Backspace pressed")
 
-        # Handle other actions
+        # Handle "Update Hand Position" action
         elif action == "Update Hand Position":
             middle_tip = hand_landmarks.landmark[12]
             config.last_hand_position = (middle_tip.x, middle_tip.y)
@@ -124,14 +128,17 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
                     config.is_text_input_mode = False
                     print("Exited text input mode")
 
+        # Handle "Scroll Down" action
         elif action == "Scroll Down":
             pyautogui.scroll(-100)
             print("Scrolled Down")
 
+        # Handle "Right Click" action
         elif action == "Right Click":
             pyautogui.rightClick()
             print("Right Click performed")
 
+        # Handle "Listen for Voice Command" action
         elif action == "Listen for Voice Command":
             if config.is_text_input_mode:
                 voice_command = get_voice_command()
@@ -155,16 +162,16 @@ def perform_action(current_gesture, hand_landmarks, thumb_direction):
                         cv2.imshow("Gesture Control", frame)
                         cv2.waitKey(1)
 
+        # Handle "Start Voice Input" action
         elif action == "Start Voice Input":
             if config.is_text_input_mode and not config.is_listening:
                 print("Starting voice input...")
                 start_voice_input()
 
+        # Handle "Exit Text Input Mode" action
         elif action == "Exit Text Input Mode":
             if config.is_text_input_mode:
                 config.is_text_input_mode = False
                 print("Exited text input mode")
 
     config.last_gesture = current_gesture
-
-    
