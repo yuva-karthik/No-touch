@@ -1,4 +1,3 @@
-# gesture.py
 import numpy as np
 from math import sqrt
 from config import *
@@ -44,7 +43,8 @@ def get_gesture_name(fingers, angles, thumb_direction):
         (1, 1, 1, 1, 1): "🖐 Open Palm",
         (1, 1, 1, 0, 0): "🤟 I Love You",
         (0, 1, 1, 1, 0): "🤘 Yo",
-        (0, 0, 0, 0, 1): "👎 Thumbs Down"
+        (0, 0, 0, 0, 1): "👎 Thumbs Down",
+        (1, 0, 0, 0, 1): "call me gesture"  # New mapping for call me gesture
     }
     
     # Special case for Thumbs Up (up/down)
